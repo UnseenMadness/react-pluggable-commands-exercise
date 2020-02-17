@@ -1,0 +1,23 @@
+html {
+  height: 100%
+}
+
+
+body {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.disabled {
+  pointer-events: none;
+  cursor: default;
+  opacity: 0.5;
+}
+
+.grid-page {
+  min-width: 16em;
+  padding: 1em;
+  border: 1px solid #eee;
+}
