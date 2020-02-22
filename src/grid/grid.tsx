@@ -13,7 +13,11 @@ interface State {
   isPrintSumDialogVisible: boolean;
   thinking: boolean;
   totalAmount: number;
+  // state for rename command
+  isRenamingDialogVisible: boolean;
 }
+
+
 
 export class Grid extends React.Component<{}, State> {
   state: Readonly<State> = {
@@ -24,6 +28,7 @@ export class Grid extends React.Component<{}, State> {
           .slice(2),
         name: 'One',
         amount: 0,
+        newName: 'One',
       },
       {
         id: Math.random()
@@ -31,6 +36,7 @@ export class Grid extends React.Component<{}, State> {
           .slice(2),
         name: 'Two',
         amount: 16,
+        newName: 'Two',
       },
       {
         id: Math.random()
@@ -38,6 +44,7 @@ export class Grid extends React.Component<{}, State> {
           .slice(2),
         name: 'Three',
         amount: 0,
+        newName: 'Three',
       },
       {
         id: Math.random()
@@ -45,12 +52,14 @@ export class Grid extends React.Component<{}, State> {
           .slice(2),
         name: 'Const',
         amount: 42,
+        newName: 'Three',
       },
     ],
     selection: [],
     processing: [],
     isPrintSumDialogVisible: false,
     thinking: false,
+    isRenamingDialogVisible: false,
     totalAmount: NaN,
   };
 
@@ -71,6 +80,7 @@ export class Grid extends React.Component<{}, State> {
       selection: updatedSelection,
       processing: [],
       isPrintSumDialogVisible: false,
+      isRenamingDialogVisible: false,
     });
   };
 
@@ -98,9 +108,31 @@ export class Grid extends React.Component<{}, State> {
     }, 1000);
   };
 
+  runRenameCommand = () => {
+    this.setState({ isRenamingDialogVisible: true });
+  }
+
+  setNewName = () => {
+    const filteredProcessing = this.state.processing.filter(row => row.newName !== row.name);
+    const updated = filteredProcessing.map(row => ({
+      ...row,
+      name: row.newName,
+    }));
+    window.setTimeout(() => this.handleCommandComplete(updated), 100);
+  }
+
+  changeNewName = (value: string) => {
+    const updated = this.state.processing.map(row => ({
+      ...row,
+      newName: value.trim(),
+    }));
+    this.setState({ processing: updated });
+  }
+
   render() {
     const { rows, selection } = this.state;
     const { isPrintSumDialogVisible, thinking, totalAmount } = this.state;
+    const { isRenamingDialogVisible } = this.state;
     return (
       <div className="grid-page">
         <div>
@@ -130,29 +162,57 @@ export class Grid extends React.Component<{}, State> {
             >
               <i className="icon icon-emoji" />
             </button>
+            <button
+              className="btn"
+              title="Rename"
+              disabled={selection.length !== 1}
+              onClick={() => this.setState({ processing: this.state.selection.slice() }, this.runRenameCommand)}
+            >
+              <i className="icon icon-edit" />
+            </button>
           </div>
         </div>
         {thinking && isPrintSumDialogVisible ? (
           <Dialog>Calculating total amount...</Dialog>
         ) : (
-          isPrintSumDialogVisible && (
+            isPrintSumDialogVisible && (
+              <Dialog>
+                <div className="modal-header">
+                  <div className="modal-title h5">Summary</div>
+                </div>
+                <div className="modal-body">
+                  <div className="content">
+                    <p>Total amount for selected items is {totalAmount} pieces</p>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button className="btn" onClick={() => this.handleCommandComplete([])}>
+                    OK
+                </button>
+                </div>
+              </Dialog>
+            )
+          )}
+        {
+          isRenamingDialogVisible && (
             <Dialog>
               <div className="modal-header">
-                <div className="modal-title h5">Summary</div>
+                <div className="modal-title h5">Renaming</div>
               </div>
               <div className="modal-body">
                 <div className="content">
-                  <p>Total amount for selected items is {totalAmount} pieces</p>
+                  <p>Name of selected item:</p>
                 </div>
+                <input defaultValue={this.state.processing[0].name} onChange={(e: React.FormEvent<HTMLInputElement>) => this.changeNewName(e.currentTarget.value)}></input>
               </div>
               <div className="modal-footer">
-                <button className="btn" onClick={() => this.handleCommandComplete([])}>
-                  OK
+                <button className="btn" onClick={() => this.setNewName()}>
+                  Rename
                 </button>
               </div>
             </Dialog>
           )
-        )}
+        }
         <ul className="grid">
           {rows.map(row => {
             const increaseDisabled = row.name === 'Const';
@@ -163,6 +223,7 @@ export class Grid extends React.Component<{}, State> {
             const handleRowDecrease = decreaseDisabled
               ? undefined
               : () => this.setState({ processing: [row] }, this.runDecreaseCommand);
+            const handleRowRename = () => this.setState({ processing: [row] }, this.runRenameCommand);
             return (
               <GridItem
                 key={row.id}
@@ -176,6 +237,9 @@ export class Grid extends React.Component<{}, State> {
                     </li>
                     <li className={'menu-item' + (decreaseDisabled ? ' disabled' : '')}>
                       <a onClick={handleRowDecrease}>Decrease</a>
+                    </li>
+                    <li className={'menu-item'}>
+                      <a onClick={handleRowRename}>Rename</a>
                     </li>
                   </>
                 }
