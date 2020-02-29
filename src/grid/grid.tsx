@@ -1,25 +1,40 @@
 /* eslint-disable jsx-a11y/anchor-is-valid */
 import * as React from 'react';
 import GridItem from './grid-item';
-import { Dialog } from '../dialog/dialog';
+import { ICommand, CommandProps, RenderState } from '../commands/commands';
 
 interface State {
   // grid itself state
-  rows: any[]; // all rows
-  selection: any[]; // currently selected rows
-  processing: any[]; // rows currently processed by some command
-
-  // state for print summary command
-  isPrintSumDialogVisible: boolean;
-  thinking: boolean;
-  totalAmount: number;
-  // state for rename command
-  isRenamingDialogVisible: boolean;
+  rows: Row[]; // all rows
+  selection: Row[]; // currently selected rows
+  processing: Row[]; // rows currently processed by some command
+  needDialog: boolean
+  runningCommand: number
 }
 
 
+export class Row {
+  id: string;
+  name: string;
+  newName: string;
+  amount: number;
+  constructor(id: string, name: string, amount: number, newName: string) {
+    this.id = id;
+    this.name = name;
+    this.newName = newName;
+    this.amount = amount;
+  }
+}
 
-export class Grid extends React.Component<{}, State> {
+interface Props {
+  commands: ICommand[]
+}
+
+
+export class Grid extends React.Component<Props, State> {
+  static defaultComponents: Props = {
+    commands: []
+  }
   state: Readonly<State> = {
     rows: [
       {
@@ -52,15 +67,13 @@ export class Grid extends React.Component<{}, State> {
           .slice(2),
         name: 'Const',
         amount: 42,
-        newName: 'Three',
+        newName: 'Const',
       },
     ],
     selection: [],
     processing: [],
-    isPrintSumDialogVisible: false,
-    thinking: false,
-    isRenamingDialogVisible: false,
-    totalAmount: NaN,
+    needDialog: false,
+    runningCommand: 0,
   };
 
   handleSelectToggle = (row: any) => {
@@ -79,151 +92,50 @@ export class Grid extends React.Component<{}, State> {
       rows: updatedRows,
       selection: updatedSelection,
       processing: [],
-      isPrintSumDialogVisible: false,
-      isRenamingDialogVisible: false,
+      needDialog: false,
+      runningCommand: 0
     });
   };
 
-  runIncreaseCommand = () => {
-    const updated = this.state.processing.map(row => ({
-      ...row,
-      amount: row.amount + 1,
-    }));
-    window.setTimeout(() => this.handleCommandComplete(updated), 100);
-  };
-
-  runDecreaseCommand = () => {
-    const updated = this.state.processing.map(row => ({
-      ...row,
-      amount: row.amount - 1,
-    }));
-    window.setTimeout(() => this.handleCommandComplete(updated), 100);
-  };
-
-  runPrintSumCommand = () => {
-    this.setState({ isPrintSumDialogVisible: true, thinking: true });
-    window.setTimeout(() => {
-      const totalAmount = this.state.processing.reduce((sum, row) => sum + row.amount, 0);
-      this.setState({ thinking: false, totalAmount });
-    }, 1000);
-  };
-
-  runRenameCommand = () => {
-    this.setState({ isRenamingDialogVisible: true });
-  }
-
-  setNewName = () => {
-    const filteredProcessing = this.state.processing.filter(row => row.newName !== row.name);
-    const updated = filteredProcessing.map(row => ({
-      ...row,
-      name: row.newName,
-    }));
-    window.setTimeout(() => this.handleCommandComplete(updated), 100);
-  }
-
-  changeNewName = (value: string) => {
-    const updated = this.state.processing.map(row => ({
-      ...row,
-      newName: value.trim(),
-    }));
-    this.setState({ processing: updated });
+  runCommand = (needDialog: boolean, commandIndex: number, updated: Row[]) => {
+    this.setState({ needDialog: needDialog, runningCommand: commandIndex }, () => {
+      if (needDialog)
+        this.forceUpdate();
+      else 
+        window.setTimeout(() => this.handleCommandComplete(updated), 100);
+    });
   }
 
   render() {
-    const { rows, selection } = this.state;
-    const { isPrintSumDialogVisible, thinking, totalAmount } = this.state;
-    const { isRenamingDialogVisible } = this.state;
+    const { rows, selection, needDialog, runningCommand } = this.state;
+    const commands = this.props.commands.slice();
     return (
       <div className="grid-page">
         <div>
           Toolbar:&nbsp;
           <div className="btn-group">
-            <button
-              className="btn"
-              title="Increase"
-              disabled={selection.length === 0 || selection.some(row => row.name === 'Const')}
-              onClick={() => this.setState({ processing: this.state.selection.slice() }, this.runIncreaseCommand)}
-            >
-              <i className="icon icon-plus" />
-            </button>
-            <button
-              className="btn"
-              title="Decrease"
-              disabled={selection.length === 0 || selection.some(row => row.name === 'Const' || row.amount === 0)}
-              onClick={() => this.setState({ processing: this.state.selection.slice() }, this.runDecreaseCommand)}
-            >
-              <i className="icon icon-minus" />
-            </button>
-            <button
-              className="btn"
-              title="Print Summary"
-              disabled={selection.length === 0}
-              onClick={() => this.setState({ processing: this.state.selection.slice() }, this.runPrintSumCommand)}
-            >
-              <i className="icon icon-emoji" />
-            </button>
-            <button
-              className="btn"
-              title="Rename"
-              disabled={selection.length !== 1}
-              onClick={() => this.setState({ processing: this.state.selection.slice() }, this.runRenameCommand)}
-            >
-              <i className="icon icon-edit" />
-            </button>
+            {
+              commands.map((command, i) => {
+                const props: CommandProps = {
+                  renderState: RenderState.toolbarButton,
+                  selection: selection,
+                  ClickHandler: (neeDialog: boolean, updated: Row[]) => { this.setState({ processing: selection.slice() }, () => this.runCommand(neeDialog, i, updated)) },
+                }
+                return command.getElement(props);
+              })
+            }
           </div>
         </div>
-        {thinking && isPrintSumDialogVisible ? (
-          <Dialog>Calculating total amount...</Dialog>
-        ) : (
-            isPrintSumDialogVisible && (
-              <Dialog>
-                <div className="modal-header">
-                  <div className="modal-title h5">Summary</div>
-                </div>
-                <div className="modal-body">
-                  <div className="content">
-                    <p>Total amount for selected items is {totalAmount} pieces</p>
-                  </div>
-                </div>
-                <div className="modal-footer">
-                  <button className="btn" onClick={() => this.handleCommandComplete([])}>
-                    OK
-                </button>
-                </div>
-              </Dialog>
-            )
-          )}
         {
-          isRenamingDialogVisible && (
-            <Dialog>
-              <div className="modal-header">
-                <div className="modal-title h5">Renaming</div>
-              </div>
-              <div className="modal-body">
-                <div className="content">
-                  <p>Name of selected item:</p>
-                </div>
-                <input defaultValue={this.state.processing[0].name} onChange={(e: React.FormEvent<HTMLInputElement>) => this.changeNewName(e.currentTarget.value)}></input>
-              </div>
-              <div className="modal-footer">
-                <button className="btn" onClick={() => this.setNewName()}>
-                  Rename
-                </button>
-              </div>
-            </Dialog>
-          )
+          needDialog && (
+            commands[runningCommand].getElement({
+              renderState: RenderState.dialog,
+              selection: this.state.processing ?? [],
+              ClickHandler: (neeDialog: boolean, updated: Row[]) => { this.runCommand(neeDialog, this.state.runningCommand, updated) },
+            }))
         }
-        <ul className="grid">
+        < ul className="grid">
           {rows.map(row => {
-            const increaseDisabled = row.name === 'Const';
-            const handleRowIncrease = increaseDisabled
-              ? undefined
-              : () => this.setState({ processing: [row] }, this.runIncreaseCommand);
-            const decreaseDisabled = row.name === 'Const' || row.amount === 0;
-            const handleRowDecrease = decreaseDisabled
-              ? undefined
-              : () => this.setState({ processing: [row] }, this.runDecreaseCommand);
-            const handleRowRename = () => this.setState({ processing: [row] }, this.runRenameCommand);
             return (
               <GridItem
                 key={row.id}
@@ -232,22 +144,23 @@ export class Grid extends React.Component<{}, State> {
                 onSelectToggle={this.handleSelectToggle}
                 contextMenu={
                   <>
-                    <li className={'menu-item' + (increaseDisabled ? ' disabled' : '')}>
-                      <a onClick={handleRowIncrease}>Increase</a>
-                    </li>
-                    <li className={'menu-item' + (decreaseDisabled ? ' disabled' : '')}>
-                      <a onClick={handleRowDecrease}>Decrease</a>
-                    </li>
-                    <li className={'menu-item'}>
-                      <a onClick={handleRowRename}>Rename</a>
-                    </li>
+                    {
+                      commands.map((command, i) => {
+                        const props: CommandProps = {
+                          renderState: RenderState.contextMenuItem,
+                          selection: [row],
+                          ClickHandler: (neeDialog: boolean, updated: Row[]) => { this.setState({ processing: [row] }, () => this.runCommand(neeDialog, i, updated)) },
+                        }
+                        return command.getElement(props);
+                      })
+                    }
                   </>
                 }
               />
             );
           })}
         </ul>
-      </div>
+      </div >
     );
   }
 }
