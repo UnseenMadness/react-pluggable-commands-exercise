@@ -1,14 +1,23 @@
 /* eslint-disable jsx-a11y/anchor-is-valid */
 import * as React from 'react';
 import GridItem from './grid-item';
-import { ICommand, CommandProps, RenderState } from '../commands/commands';
+
+export interface ICommand {
+  toolBarButtonRender: (selection: Row[], runCommand: () => void) => JSX.Element | null;
+  contextMenuItemRender: (row: Row, runCommand: () => void) => JSX.Element | null;
+  Component: React.ComponentType<CommandProps>;
+}
+
+export interface CommandProps {
+  processing: Row[];
+  onCommandComplete(updated: Row[]): void;
+}
 
 interface State {
   // grid itself state
   rows: Row[]; // all rows
   selection: Row[]; // currently selected rows
   processing: Row[]; // rows currently processed by some command
-  needDialog: boolean
   runningCommand: number
 }
 
@@ -16,12 +25,10 @@ interface State {
 export class Row {
   id: string;
   name: string;
-  newName: string;
   amount: number;
   constructor(id: string, name: string, amount: number, newName: string) {
     this.id = id;
     this.name = name;
-    this.newName = newName;
     this.amount = amount;
   }
 }
@@ -30,11 +37,7 @@ interface Props {
   commands: ICommand[]
 }
 
-
 export class Grid extends React.Component<Props, State> {
-  static defaultComponents: Props = {
-    commands: []
-  }
   state: Readonly<State> = {
     rows: [
       {
@@ -43,7 +46,6 @@ export class Grid extends React.Component<Props, State> {
           .slice(2),
         name: 'One',
         amount: 0,
-        newName: 'One',
       },
       {
         id: Math.random()
@@ -51,7 +53,6 @@ export class Grid extends React.Component<Props, State> {
           .slice(2),
         name: 'Two',
         amount: 16,
-        newName: 'Two',
       },
       {
         id: Math.random()
@@ -59,7 +60,6 @@ export class Grid extends React.Component<Props, State> {
           .slice(2),
         name: 'Three',
         amount: 0,
-        newName: 'Three',
       },
       {
         id: Math.random()
@@ -67,12 +67,10 @@ export class Grid extends React.Component<Props, State> {
           .slice(2),
         name: 'Const',
         amount: 42,
-        newName: 'Const',
       },
     ],
     selection: [],
     processing: [],
-    needDialog: false,
     runningCommand: 0,
   };
 
@@ -92,22 +90,12 @@ export class Grid extends React.Component<Props, State> {
       rows: updatedRows,
       selection: updatedSelection,
       processing: [],
-      needDialog: false,
-      runningCommand: 0
+      runningCommand: -1,
     });
   };
 
-  runCommand = (needDialog: boolean, commandIndex: number, updated: Row[]) => {
-    this.setState({ needDialog: needDialog, runningCommand: commandIndex }, () => {
-      if (needDialog)
-        this.forceUpdate();
-      else 
-        window.setTimeout(() => this.handleCommandComplete(updated), 100);
-    });
-  }
-
   render() {
-    const { rows, selection, needDialog, runningCommand } = this.state;
+    const { rows, selection, runningCommand } = this.state;
     const commands = this.props.commands.slice();
     return (
       <div className="grid-page">
@@ -115,44 +103,34 @@ export class Grid extends React.Component<Props, State> {
           Toolbar:&nbsp;
           <div className="btn-group">
             {
-              commands.map((command, i) => {
-                const props: CommandProps = {
-                  renderState: RenderState.toolbarButton,
-                  selection: selection,
-                  ClickHandler: (neeDialog: boolean, updated: Row[]) => { this.setState({ processing: selection.slice() }, () => this.runCommand(neeDialog, i, updated)) },
-                }
-                return command.getElement(props);
-              })
+              commands.map((command, i) => command.toolBarButtonRender(
+                selection,
+                () => this.setState({ processing: selection.slice(), runningCommand: i }),
+              ))
             }
           </div>
         </div>
         {
-          needDialog && (
-            commands[runningCommand].getElement({
-              renderState: RenderState.dialog,
-              selection: this.state.processing ?? [],
-              ClickHandler: (neeDialog: boolean, updated: Row[]) => { this.runCommand(neeDialog, this.state.runningCommand, updated) },
-            }))
+          runningCommand !== -1 && React.createElement(commands[runningCommand].Component, {
+            processing: this.state.processing || [],
+            onCommandComplete: this.handleCommandComplete,
+          })
         }
-        < ul className="grid">
+        <ul className="grid">
           {rows.map(row => {
             return (
               <GridItem
                 key={row.id}
                 row={row}
-                isSelected={this.state.selection.indexOf(row) !== -1}
+                isSelected={selection.indexOf(row) !== -1}
                 onSelectToggle={this.handleSelectToggle}
                 contextMenu={
                   <>
                     {
-                      commands.map((command, i) => {
-                        const props: CommandProps = {
-                          renderState: RenderState.contextMenuItem,
-                          selection: [row],
-                          ClickHandler: (neeDialog: boolean, updated: Row[]) => { this.setState({ processing: [row] }, () => this.runCommand(neeDialog, i, updated)) },
-                        }
-                        return command.getElement(props);
-                      })
+                      commands.map((command, i) => command.contextMenuItemRender(
+                        row,
+                        () => this.setState({ processing: [row], runningCommand: i }),
+                      ))
                     }
                   </>
                 }
